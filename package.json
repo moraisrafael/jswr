@@ -1,0 +1,26 @@
+{
+  "name": "jswr",
+  "version": "1.0.0",
+  "description": "jswr is a data fetching library, that uses stale-while-revalidate invalidation strategy",
+  "main": "src/jswr.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moraisrafael/jswr.git"
+  },
+  "keywords": [
+    "swr",
+    "stale",
+    "revalidate",
+    "cache",
+    "fetch"
+  ],
+  "author": "Rafael Morais da Cunha",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/moraisrafael/jswr/issues"
+  },
+  "homepage": "https://github.com/moraisrafael/jswr#readme"
+}
