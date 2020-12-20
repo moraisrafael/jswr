@@ -19,7 +19,7 @@ class JswrCacheItem {
     }
 }
 
-class JswrInMemoryCache {
+class JswrInMemoryCache extends JswrCache {
     cache = {};
     get(key) {
         return this.cache[key];
@@ -74,48 +74,63 @@ function useSWR(key, fetcher = Jswr.globalFetcher, options) {
     let expired = true;
     let stale = true;
 
-    let cacheItem = options.cache.get(key);
-    if (cacheItem) {
-        expired = cacheItem.expired;
-        stale = cacheItem.stale;
+    let cachedItem = options.cache.get(key);
+    if (cachedItem) {
+        expired = cachedItem.expired;
+        stale = cachedItem.stale;
 
         if (expired) {
             options.cache.remove(key);
         }
         else {
-            result.data = cacheItem.value;
+            result.data = cachedItem.value;
         }
     }
 
     if (expired || stale) {
+        fetchAndCache(key, result, fetcher, options)
+    } else {
+        result.isValidating = false;
+    }
+
+    return result;
+}
+
+function fetchAndCache(key, result, fetcher, options) {
         const fetchPromise = fetcher(key);
 
         fetchPromise.then((data) => {
             result.data = data;
+        });
 
-            const now = Date.now();
-            options.cache.set(
-                key,
-                new JswrCacheItem(
-                    data,
-                    now + (options.maxAge + options.maxStale) * 1000,
-                    now + options.maxAge * 1000
-                )
-            );
-
-            setTimeout(() => {
-                options.cache.remove(key);
-            }, (options.maxAge + options.maxStale) * 1000);
+        fetchPromise.then((data) => {
+            cashData(key, data, options);
         });
 
         fetchPromise.catch((error) => {
             result.error = error;
         });
 
-        fetchPromise.finally(() => (result.isValidating = false));
-    } else {
-        result.isValidating = false;
-    }
+        fetchPromise.finally(() => {
+            result.isValidating = false;
+        });
+}
 
-    return result;
+function cashData(key, data, options) {
+    const now = Date.now();
+    options.cache.set(
+        key,
+        new JswrCacheItem(
+            data,
+            now + (options.maxAge + options.maxStale) * 1000,
+            now + options.maxAge * 1000
+        )
+    );
+
+    setTimeout(() => {
+        var cachedItem = options.cache.get(key);
+        if (cachedItem.expired) {
+            options.cache.remove(key);
+        }
+    }, (options.maxAge + options.maxStale) * 1000);
 }
