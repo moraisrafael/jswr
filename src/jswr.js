@@ -1,9 +1,9 @@
+"use strict";
+
 export default useSWR;
 export { Jswr, JswrCache };
 
 class JswrCacheItem {
-    expires = 0;
-    stales = 0;
     constructor(value, expires = 0, stales = 0) {
         this.value = value;
         this.expires = expires;
@@ -19,8 +19,19 @@ class JswrCacheItem {
     }
 }
 
+class JswrCache {
+    constructor() {}
+    get(key) {}
+    set(key, value) {}
+    remove(key) {}
+}
+
 class JswrInMemoryCache extends JswrCache {
-    cache = {};
+    constructor() {
+        super();
+        this.cache = {};
+    }
+
     get(key) {
         return this.cache[key];
     }
@@ -32,30 +43,53 @@ class JswrInMemoryCache extends JswrCache {
     }
 }
 
-class JswrCache {
-    get(key) {}
-    set(key, value) {}
-    remove(key) {}
+function fetchXMLHttpRequest(url) {
+    return new Promise((resolve, reject) => {
+        try {
+            const request = new XMLHttpRequest();
+
+            request.open("GET", url, false);
+            request.timeout = 8000;
+
+            request.send();
+
+            if (
+                request.readyState != XMLHttpRequest.DONE &&
+                request.readyState != 4
+            ) {
+                reject("Unable to complete HTTP request.");
+            }
+
+            if (request.status < 200 || request.status > 299) {
+                reject({
+                    statusCode: request.status,
+                    respose: request.response,
+                });
+            }
+
+            resolve(request.response);
+        } catch (error) {
+            reject(error);
+        }
+    });
 }
 
 class Jswr {
-    constructor(fetcher = Jswr.globalFetcher, options) {
+    constructor(fetcher = fetchXMLHttpRequest, options) {
         this.fetcher = fetcher;
-        this.options = { ...globalOptions, ...options };
+        const cache = new JswrInMemoryCache();
+        this.options = {
+            maxAge: 2,
+            maxStale: 10,
+            // minFresh: 0,
+            // noCache: false,
+            // noStore: false,
+            // noTransform: false,
+            // onlyIfCached: false,
+            cache,
+            ...options,
+        };
     }
-
-    static globalFetcher = fetch;
-
-    static globalOptions = {
-        maxAge: 2,
-        maxStale: 10,
-        // minFresh: 0,
-        // noCache: false,
-        // noStore: false,
-        // noTransform: false,
-        // onlyIfCached: false,
-        cache: new JswrInMemoryCache(),
-    };
 
     useSWR(key, fetcher = this.fetcher, options) {
         options = { ...this.options, ...options };
@@ -63,14 +97,17 @@ class Jswr {
     }
 }
 
-function useSWR(key, fetcher = Jswr.globalFetcher, options) {
+export const jswrConfig = new Jswr();
+
+function useSWR(key, fetcher = jswrConfig.fetcher, options) {
+    options = { ...options, ...jswrConfig.options };
+
     const result = {
         data: undefined,
         error: undefined,
         isValidating: true,
         // mutate,
     };
-    options = { ...options, ...Jswr.globalOptions };
     let expired = true;
     let stale = true;
 
@@ -81,14 +118,13 @@ function useSWR(key, fetcher = Jswr.globalFetcher, options) {
 
         if (expired) {
             options.cache.remove(key);
-        }
-        else {
+        } else {
             result.data = cachedItem.value;
         }
     }
 
     if (expired || stale) {
-        fetchAndCache(key, result, fetcher, options)
+        fetchAndCache(key, result, fetcher, options);
     } else {
         result.isValidating = false;
     }
@@ -97,23 +133,23 @@ function useSWR(key, fetcher = Jswr.globalFetcher, options) {
 }
 
 function fetchAndCache(key, result, fetcher, options) {
-        const fetchPromise = fetcher(key);
+    const fetchPromise = fetcher(key);
 
-        fetchPromise.then((data) => {
-            result.data = data;
-        });
+    fetchPromise.then((data) => {
+        result.data = data;
+    });
 
-        fetchPromise.then((data) => {
-            cashData(key, data, options);
-        });
+    fetchPromise.then((data) => {
+        cashData(key, data, options);
+    });
 
-        fetchPromise.catch((error) => {
-            result.error = error;
-        });
+    fetchPromise.catch((error) => {
+        result.error = error;
+    });
 
-        fetchPromise.finally(() => {
-            result.isValidating = false;
-        });
+    fetchPromise.finally(() => {
+        result.isValidating = false;
+    });
 }
 
 function cashData(key, data, options) {
